@@ -40,6 +40,8 @@ class engine  extends \core_search\engine {
     }
 
     public function is_server_ready() {
+        global $CFG;
+        require_once($CFG->dirroot.'/lib/filelib.php');
         $c = new \curl();
         return (bool)json_decode($c->get($this->serverhostname));
     }
@@ -50,11 +52,7 @@ class engine  extends \core_search\engine {
         $jsondoc = json_encode($doc);
 
         $c = new \curl();
-        if ($result = json_decode($c->post($url, $jsondoc))) {
-            return $result->created == true;
-        } else {
-            return false;
-        }
+        $c->post($url, $jsondoc);
     }
 
     public function commit() {
@@ -68,24 +66,14 @@ class engine  extends \core_search\engine {
 
     public function execute_query($filters, $usercontexts) {
 
-        $data = $filters;
-
-        $search = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $data->queryfield))))));
-
-        if (!empty($data->titlefilterqueryfield)) {
-            $search['query']['bool']['must'][] = array('match' => array('title' => $data->titlefilterqueryfield));
-        }
-        if (!empty($data->authorfilterqueryfield)) {
-            $search['query']['bool']['should'][] = array('match' => array('author' => $data->authorfilterqueryfield));
-            $search['query']['bool']['should'][] = array('match' => array('user' => $data->authorfilterqueryfield));
-        }
-        if (!empty($data->modulefilterqueryfield)) {
-            $search['query']['bool']['must'][] = array('match' => array('module' => $data->modulefilterqueryfield));
-        }
+        $search = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $filters->q))))));
 
         return $this->make_request($search);
     }
 
+    /**
+     *
+     */
     private function make_request($search) {
         global $CFG;
         $url = $this->serverhostname.'/moodle/_search?pretty';
@@ -95,28 +83,20 @@ class engine  extends \core_search\engine {
         $docs = array();
         if (isset($results->hits))  {
             $numgranted = 0;
+            // TODO: apply \core_search\manager::MAX_RESULTS .
             foreach ($results->hits->hits as $r) {
-                $sourceid = explode('_', $r->_source->id);
-                $modname = $sourceid[0];
-                $modgssupport = 'gs_support_' . $modname;
-                if (!empty($CFG->$modgssupport)) {
-                    include_once($CFG->dirroot.'/mod/'.$modname.'/db/search.php');
-                    $access_func = $modname . '_search_access';
-                    $acc = $access_func($sourceid[1]);
-                    switch ($acc) {
-                        case SEARCH_ACCESS_DELETED:
-                            $this->delete_index_by_id($value->id);
-                            break;
-                        case SEARCH_ACCESS_DENIED:
-                            break;
-                        case SEARCH_ACCESS_GRANTED:
-                            if (!isset($r->_source->author)) {
-                                $r->_source->author = array($r->_source->user);
-                            }
-                            $docs[] = $r->_source;
-                            $numgranted++;
-                            break;
-                    }
+                if (!$searcharea = $this->get_search_area($r->_source->areaid)) {
+                    continue;
+                }
+                $access = $searcharea->check_access($r->_source->itemid);
+                switch ($access) {
+                    case \core_search\manager::ACCESS_DELETED:
+                    case \core_search\manager::ACCESS_DENIED:
+                      continue;
+                    case \core_search\manager::ACCESS_GRANTED:
+                        $numgranted++;
+                        $docs[] = $this->to_document($searcharea, (array)$r->_source);
+                        break;
                 }
             }
         } else {
