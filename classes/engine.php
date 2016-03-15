@@ -31,11 +31,7 @@ class engine  extends \core_search\engine {
     private $serverhostname = '';
 
     public function __construct() {
-        global $CFG;
-        if (!isset($CFG->elasticsearch_server_hostname)) {
-            return false;
-        }
-        $this->serverhostname = $CFG->elasticsearch_server_hostname;
+        $this->serverhostname = get_config('search_elasticsearch', 'server_hostname');
     }
 
     public function is_installed() {
@@ -43,14 +39,9 @@ class engine  extends \core_search\engine {
         return true;
     }
 
-    public function check_server() {
-        $url = $this->serverhostname.'/?pretty';
+    public function is_server_ready() {
         $c = new \curl();
-        if ($response = json_decode($c->get($url))) {
-            return $response->status == 200;
-        } else {
-            return false;
-        }
+        return (bool)json_decode($c->get($this->serverhostname));
     }
 
     public function add_document($doc) {
@@ -75,8 +66,9 @@ class engine  extends \core_search\engine {
     public function post_file() {
     }
 
-    public function execute_query($data) {
+    public function execute_query($filters, $usercontexts) {
 
+        $data = $filters;
 
         $search = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $data->queryfield))))));
 
