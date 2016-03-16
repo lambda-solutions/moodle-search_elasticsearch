@@ -25,5 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->version = 2015080602;
-$plugin->requires = 2014111000;
+$plugin->requires = 2016031000;
 $plugin->component = 'search_elasticsearch';
+$plugin->maturity = MATURITY_ALPHA;
+$plugin->release = '1';
