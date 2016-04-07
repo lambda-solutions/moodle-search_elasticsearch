@@ -66,6 +66,7 @@ class engine  extends \core_search\engine {
 
     public function execute_query($filters, $usercontexts) {
 
+        // TODO: filter usercontexts.
         $search = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $filters->q))))));
 
         return $this->make_request($search);
@@ -75,13 +76,12 @@ class engine  extends \core_search\engine {
      *
      */
     private function make_request($search) {
-        global $CFG;
         $url = $this->serverhostname.'/moodle/_search?pretty';
 
         $c = new \curl();
         $results = json_decode($c->post($url, json_encode($search)));
         $docs = array();
-        if (isset($results->hits))  {
+        if (isset($results->hits)) {
             $numgranted = 0;
             // TODO: apply \core_search\manager::MAX_RESULTS .
             foreach ($results->hits->hits as $r) {
@@ -110,18 +110,14 @@ class engine  extends \core_search\engine {
 
     public function get_more_like_this_text($text) {
 
-        $search = array('query' =>
-                            array('more_like_this' =>
-                                      array('fields' => array('content'),
-                                            'like_text' => $text,
-                                            'min_term_freq' => 1,
-                                            'max_query_terms' => 12)));
+        $search = array('query' => array('more_like_this' => array('fields' => array('content'), 'like_text' => $text,
+                                                                   'min_term_freq' => 1, 'max_query_terms' => 12)));
         return $this->make_request($search);
     }
 
     public function delete($module = null) {
         if ($module) {
-            // TODO
+            // TODO.
         } else {
 
             $url = $this->serverhostname.'/moodle/?pretty';
@@ -136,7 +132,6 @@ class engine  extends \core_search\engine {
             } else {
                 return false;
             }
-
         }
     }
 }

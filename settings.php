@@ -26,8 +26,8 @@ defined('MOODLE_INTERNAL') || die();
 
 if ($ADMIN->fulltree) {
 
-    //--- general settings -----------------------------------------------------------------------------------
-    $settings->add(new admin_setting_heading('search_elasticsearch_settings', '', get_string('pluginname_desc', 'search_elasticsearch')));
+    $settings->add(new admin_setting_heading('search_elasticsearch_settings', '',
+                                             get_string('pluginname_desc', 'search_elasticsearch')));
 
     if (!during_initial_install()) {
         $settings->add(new admin_setting_configtext('search_elasticsearch/server_hostname',
