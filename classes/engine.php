@@ -116,10 +116,7 @@ class engine  extends \core_search\engine {
     }
 
     public function delete($module = null) {
-        if ($module) {
-            // TODO.
-        } else {
-
+        if (!$module) {
             $url = $this->serverhostname.'/moodle/?pretty';
             $c = new \curl();
             if ($response = json_decode($c->delete($url))) {
@@ -133,5 +130,6 @@ class engine  extends \core_search\engine {
                 return false;
             }
         }
+        // TODO: handle module.
     }
 }
