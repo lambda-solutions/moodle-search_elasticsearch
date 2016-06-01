@@ -32,6 +32,7 @@ class engine  extends \core_search\engine {
 
     public function __construct() {
         $this->serverhostname = get_config('search_elasticsearch', 'server_hostname');
+        $this->indexname = get_config('search_elasticsearch', 'index_name');
     }
 
     public function is_installed() {
@@ -47,7 +48,7 @@ class engine  extends \core_search\engine {
     }
 
     public function add_document($doc) {
-        $url = $this->serverhostname.'/moodle/'.$doc['id'];
+        $url = $this->serverhostname.'/'.$this->indexname.'/'.$doc['id'];
 
         $jsondoc = json_encode($doc);
 
@@ -76,7 +77,7 @@ class engine  extends \core_search\engine {
      *
      */
     private function make_request($search) {
-        $url = $this->serverhostname.'/moodle/_search?pretty';
+        $url = $this->serverhostname.'/'.$this->indexname.'/_search?pretty';
 
         $c = new \curl();
         $results = json_decode($c->post($url, json_encode($search)));
@@ -117,7 +118,7 @@ class engine  extends \core_search\engine {
 
     public function delete($module = null) {
         if (!$module) {
-            $url = $this->serverhostname.'/moodle/?pretty';
+            $url = $this->serverhostname.'/'.$this->indexname.'/?pretty';
             $c = new \curl();
             if ($response = json_decode($c->delete($url))) {
                 if ( (isset($response->acknowledged) && ($response->acknowledged == true)) ||
