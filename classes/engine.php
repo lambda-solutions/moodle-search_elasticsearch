@@ -26,9 +26,10 @@ namespace search_elasticsearch;
 
 defined('MOODLE_INTERNAL') || die();
 
-class engine  extends \core_search\engine {
+class engine extends \core_search\engine {
 
     private $serverhostname = '';
+    private $indexname = '';
 
     public function __construct() {
         $this->serverhostname = get_config('search_elasticsearch', 'server_hostname');
@@ -47,10 +48,10 @@ class engine  extends \core_search\engine {
         return (bool)json_decode($c->get($this->serverhostname));
     }
 
-    public function add_document($doc) {
-        $url = $this->serverhostname.'/'.$this->indexname.'/'.$doc['id'];
+    public function add_document($document, $fileindexing = false) {
+        $url = $this->serverhostname.'/'.$this->indexname.'/'.$document['id'];
 
-        $jsondoc = json_encode($doc);
+        $jsondoc = json_encode($document);
 
         $c = new \curl();
         $c->post($url, $jsondoc);
@@ -65,12 +66,29 @@ class engine  extends \core_search\engine {
     public function post_file() {
     }
 
-    public function execute_query($filters, $usercontexts) {
+    public function execute_query($filters, $usercontexts, $limit = 0) {
 
         // TODO: filter usercontexts.
         $search = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $filters->q))))));
 
         return $this->make_request($search);
+    }
+
+    public function get_query_total_count() {
+        $url = $this->serverhostname.'/'.$this->indexname.'/_count';
+
+        $c = new \curl();
+        $result = json_decode($c->post($url));
+
+        if (isset($result->count)) {
+            return $result->count;
+        }
+        else {
+            if (!$result) {
+                return false;
+            }
+            return $result->error;
+        }
     }
 
     /**
