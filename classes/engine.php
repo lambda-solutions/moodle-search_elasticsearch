@@ -112,11 +112,31 @@ class engine extends \core_search\engine {
      *
      */
     private function make_request($search) {
-        $url = $this->serverhostname.'/'.$this->indexname.'/_search?pretty';
+        $url = $this->serverhostname.'/'.$this->indexname.'/_search';
 
         $c = new \curl();
-        $results = json_decode($c->post($url, json_encode($search)));
+        $jsonsearch = json_encode($search);
+
+        // A giant block of code that is really just error checking around the curl request.
+        try {
+            // Now actually do the request.
+            $result = $c->post($url, $jsonsearch);
+            $code = $c->get_errno();
+            $info = $c->get_info();
+            // Now error handling. It is just informational, since we aren't tracking per file/doc results.
+            if ($code != 0) {
+                // This means an internal cURL error occurred error is in result.
+                $message = 'Curl error '.$code.' while searching with query: '.$jsonsearch.': '.$result.'. Info: '.$info.'.';
+                debugging($message, DEBUG_DEVELOPER);
+            }
+        } catch (\Exception $e) {
+            // There was an error, but we are not tracking per-file success, so we just continue on.
+            debugging('Unknown exception while searching with query: "'.$jsonsearch.'".', DEBUG_DEVELOPER);
+        }
+
         $docs = array();
+        $results = json_decode($result);
+
         if (isset($results->hits)) {
             $numgranted = 0;
             // TODO: apply \core_search\manager::MAX_RESULTS .
@@ -139,7 +159,10 @@ class engine extends \core_search\engine {
             if (!$results) {
                 return false;
             }
-            return $results->error;
+            if (isset($results->error)) {
+                return $results->error;
+            }
+            return $results->message;
         }
         return $docs;
     }
