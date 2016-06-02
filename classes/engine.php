@@ -49,12 +49,29 @@ class engine extends \core_search\engine {
     }
 
     public function add_document($document, $fileindexing = false) {
-        $url = $this->serverhostname.'/'.$this->indexname.'/'.$document['id'];
+        $doc = $document->export_for_engine();
+        $url = $this->serverhostname.'/'.$this->indexname.'/'.$doc['itemid'];
 
-        $jsondoc = json_encode($document);
+        $jsondoc = json_encode($doc);
 
         $c = new \curl();
-        $c->post($url, $jsondoc);
+
+        // A giant block of code that is really just error checking around the curl request.
+        try {
+            // Now actually do the request.
+            $result = $c->post($url, $jsondoc);
+            $code = $c->get_errno();
+            $info = $c->get_info();
+            // Now error handling. It is just informational, since we aren't tracking per file/doc results.
+            if ($code != 0) {
+                // This means an internal cURL error occurred error is in result.
+                $message = 'Curl error '.$code.' while indexing file with document id '.$doc['itemid'].': '.$result.'.';
+                debugging($message, DEBUG_DEVELOPER);
+            }
+        } catch (\Exception $e) {
+            // There was an error, but we are not tracking per-file success, so we just continue on.
+            debugging('Unknown exception while indexing file "'.$doc['title'].'".', DEBUG_DEVELOPER);
+        }
     }
 
     public function commit() {
