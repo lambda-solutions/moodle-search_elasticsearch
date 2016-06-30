@@ -85,10 +85,65 @@ class engine extends \core_search\engine {
 
     public function execute_query($filters, $usercontexts, $limit = 0) {
 
-        // TODO: filter usercontexts.
-        $search = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $filters->q))))));
+        if (empty($limit)) {
+            $limit = \core_search\manager::MAX_RESULTS;
+        }
 
-        return $this->make_request($search);
+        $search = $this->create_user_query($filters, $usercontexts);
+
+        $response = $this->make_request($search);
+        //TODO: Respect limit of results
+
+        return $response;
+    }
+
+    protected function create_user_query($filters, $usercontexts) {
+        global $USER;
+
+        $data = clone $filters;
+
+        $query = array('query' => array('filtered' => array('query' => array('bool' => array('must' => array(array('match' => array('content' => $data->q))))))));
+        //Add title matching to the query so that it affects query score, if there is a title.
+        if (!empty($data->title)) {
+            $query['query']['filtered']['query']['bool']['must'][] = array('match' => array('title' => $data->title));            
+        }
+
+        //Apply filters
+        //
+        //Filter for owneruserid
+        $query['query']['filtered']['query']['bool']['should'][] = array('term' => array('owneruserid' => \core_search\manager::NO_OWNER_ID));
+        $query['query']['filtered']['query']['bool']['should'][] = array('term' => array('owneruserid' => $USER->id));
+
+        //Add filter for the proper contextid that the user can access. If $usercontexts is true, the user can view all contexts.
+        if ($usercontexts && is_array($usercontexts)) {
+            $allcontexts = array();
+            foreach ($usercontexts as $areaid => $areacontexts) {
+                foreach ($areacontexts as $contextid) {
+                    //Ensure contextids are unique.
+                    $allcontexts[$contextid] = $contextid;
+                }
+            }
+            if (empty($allcontexts)) {
+                //User has no valid contexts so return no results.
+                return array(); //CHECK THAT BLANK SEARCH RETURNS NOTHING IN ELASTICSEARCH!!!!
+            }
+
+            //Add contextid filters
+            foreach ($allcontexts as $cid => $contextid) {
+                $query['query']['filtered']['filter']['bool']['should'][] = array('term' => array('contextid' => $contextid));
+            }            
+
+        }
+
+        //Add filter for modified date ranges
+        if ($data->timestart > 0) {
+            $query['query']['filtered']['filter']['bool']['must'][] = array('range' => array('modified' => array('gte' => $data->timestart)));
+        }
+        if ($data->timeend > 0) {
+            $query['query']['filtered']['filter']['bool']['must'][] = array('range' => array('modified' => array('lte' => $data->timeend)));
+        }
+
+        return $query;
     }
 
     public function get_query_total_count() {
@@ -147,6 +202,7 @@ class engine extends \core_search\engine {
                 $access = $searcharea->check_access($r->_source->itemid);
                 switch ($access) {
                     case \core_search\manager::ACCESS_DELETED:
+                    //TODO: Delete by itemid
                     case \core_search\manager::ACCESS_DENIED:
                       continue;
                     case \core_search\manager::ACCESS_GRANTED:
