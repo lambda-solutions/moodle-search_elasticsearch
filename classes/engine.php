@@ -106,17 +106,17 @@ class engine extends \core_search\engine {
 
         $data = clone $filters;
 
-        $query = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $data->q))))));
+        $query = array('query' => array('filtered' => array('query' => array('bool' => array('must' => array(array('match' => array('content' => $data->q))))))));
         //Add title matching to the query so that it affects query score, if there is a title.
         if (!empty($data->title)) {
-            $query['query']['bool']['must'][] = array('match' => array('title' => $data->title));            
+            $query['query']['filtered']['query']['bool']['must'][] = array('match' => array('title' => $data->title));            
         }
 
         //Apply filters
         //
         //Filter for owneruserid
-        $query['query']['bool']['should'][] = array('term' => array('owneruserid' => \core_search\manager::NO_OWNER_ID));
-        $query['query']['bool']['should'][] = array('term' => array('owneruserid' => $USER->id));
+        $query['query']['filtered']['query']['bool']['should'][] = array('term' => array('owneruserid' => \core_search\manager::NO_OWNER_ID));
+        $query['query']['filtered']['query']['bool']['should'][] = array('term' => array('owneruserid' => $USER->id));
 
         //Add filter for the proper contextid that the user can access. If $usercontexts is true, the user can view all contexts.
         if ($usercontexts && is_array($usercontexts)) {
@@ -143,10 +143,10 @@ class engine extends \core_search\engine {
         //Add filter for modified date ranges
         //TODO: Fix query to filter for these
         if ($data->timestart > 0) {
-            //$query['query']['bool']['filter']['bool']['bool']['must'][] = array('range' => array('modified' => array('gte' => $data->timestart)));
+            $query['query']['filtered']['filter']['bool']['must'][] = array('range' => array('modified' => array('gte' => $data->timestart)));
         }
         if ($data->timeend > 0) {
-            //$query['query']['bool']['filter']['bool']['bool']['must'][] = array('range' => array('modified' => array('lte' => $data->timeend)));
+            $query['query']['filtered']['filter']['bool']['must'][] = array('range' => array('modified' => array('lte' => $data->timeend)));
         }
 
         return $query;
