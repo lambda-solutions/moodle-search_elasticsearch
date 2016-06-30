@@ -99,10 +99,6 @@ class engine extends \core_search\engine {
 
     protected function create_user_query($filters, $usercontexts) {
         global $USER;
-                // TODO: filter usercontexts.
-        //Add filter for owneruserid: -> \core_search\manager::NO_OWNER_ID or $USER->id
-
-        //WHAT IS IN $filters?!?!
 
         $data = clone $filters;
 
@@ -134,14 +130,12 @@ class engine extends \core_search\engine {
 
             //Add contextid filters
             foreach ($allcontexts as $cid => $contextid) {
-                //TODO: Fix query to filter for contextid
-                //$query['query']['bool']['filter']['bool']['must']['should'][] = array('term' => array('contextid' => $contextid)); 
+                $query['query']['filtered']['filter']['bool']['should'][] = array('term' => array('contextid' => $contextid));
             }            
 
         }
 
         //Add filter for modified date ranges
-        //TODO: Fix query to filter for these
         if ($data->timestart > 0) {
             $query['query']['filtered']['filter']['bool']['must'][] = array('range' => array('modified' => array('gte' => $data->timestart)));
         }
