@@ -92,9 +92,17 @@ class engine extends \core_search\engine {
         $search = $this->create_user_query($filters, $usercontexts);
 
         $response = $this->make_request($search);
-        //TODO: Respect limit of results
 
-        return $response;
+        //Construct the reponse that will be returned. This allows the number of hits returned to respect the hit limit.
+        foreach ($response as $responseid => $responsecontent) {
+            if ($responseid == $limit) {
+                //Number of hits has reached the limit. Stop adding to the constructed response.
+                break;
+            }
+            $limitedresponse[] = $responsecontent;
+        }
+
+        return $limitedresponse;
     }
 
     protected function create_user_query($filters, $usercontexts) {
