@@ -30,6 +30,7 @@ class engine extends \core_search\engine {
 
     private $serverhostname = '';
     private $indexname = '';
+    private $lastquerycount = 1;
 
     public function __construct() {
         $this->serverhostname = get_config('search_elasticsearch', 'server_hostname');
@@ -102,6 +103,9 @@ class engine extends \core_search\engine {
             $limitedresponse[] = $responsecontent;
         }
 
+        //Set lastquerycount so get_query_total_count can return the proper amount.
+        $this->lastquerycount = count($limitedresponse);
+
         return $limitedresponse;
     }
 
@@ -155,20 +159,7 @@ class engine extends \core_search\engine {
     }
 
     public function get_query_total_count() {
-        $url = $this->serverhostname.'/'.$this->indexname.'/_count';
-
-        $c = new \curl();
-        $result = json_decode($c->post($url));
-
-        if (isset($result->count)) {
-            return $result->count;
-        }
-        else {
-            if (!$result) {
-                return false;
-            }
-            return $result->error;
-        }
+        return $this->lastquerycount;
     }
 
     /**
