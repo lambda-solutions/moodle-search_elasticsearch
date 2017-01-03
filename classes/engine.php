@@ -46,7 +46,7 @@ class engine  extends \core_search\engine {
         return (bool)json_decode($c->get($this->serverhostname));
     }
 
-    public function add_document($doc) {
+    public function add_document($doc, $fileindexing = false) {
         $url = $this->serverhostname.'/moodle/'.$doc['id'];
 
         $jsondoc = json_encode($doc);
