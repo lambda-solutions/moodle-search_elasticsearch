@@ -64,7 +64,11 @@ class engine  extends \core_search\engine {
     public function post_file() {
     }
 
-    public function execute_query($filters, $usercontexts) {
+    public function get_query_total_count() {
+        return \core_search\manager::MAX_RESULTS;
+    }
+
+    public function execute_query($filters, $usercontexts, $limit = 0) {
 
         // TODO: filter usercontexts.
         $search = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $filters->q))))));
