@@ -26,12 +26,15 @@ namespace search_elasticsearch;
 
 defined('MOODLE_INTERNAL') || die();
 
-class engine  extends \core_search\engine {
+class engine extends \core_search\engine {
 
     private $serverhostname = '';
+    private $indexname = '';
+    private $lastquerycount = 1;
 
     public function __construct() {
         $this->serverhostname = get_config('search_elasticsearch', 'server_hostname');
+        $this->indexname = get_config('search_elasticsearch', 'index_name');
     }
 
     public function is_installed() {
@@ -48,12 +51,28 @@ class engine  extends \core_search\engine {
 
     public function add_document($document, $fileindexing = false) {
         $doc = $document->export_for_engine();
-        $url = $this->serverhostname.'/moodle/'.$doc['id'];
+        $url = $this->serverhostname.'/'.$this->indexname.'/'.$doc['itemid'];
 
         $jsondoc = json_encode($doc);
 
         $c = new \curl();
-        $c->post($url, $jsondoc);
+
+        // A giant block of code that is really just error checking around the curl request.
+        try {
+            // Now actually do the request.
+            $result = $c->post($url, $jsondoc);
+            $code = $c->get_errno();
+            $info = $c->get_info();
+            // Now error handling. It is just informational, since we aren't tracking per file/doc results.
+            if ($code != 0) {
+                // This means an internal cURL error occurred error is in result.
+                $message = 'Curl error '.$code.' while indexing file with document id '.$doc['itemid'].': '.$result.'.';
+                debugging($message, DEBUG_DEVELOPER);
+            }
+        } catch (\Exception $e) {
+            // There was an error, but we are not tracking per-file success, so we just continue on.
+            debugging('Unknown exception while indexing file "'.$doc['title'].'".', DEBUG_DEVELOPER);
+        }
     }
 
     public function commit() {
@@ -65,27 +84,113 @@ class engine  extends \core_search\engine {
     public function post_file() {
     }
 
-    public function get_query_total_count() {
-        return \core_search\manager::MAX_RESULTS;
-    }
-
     public function execute_query($filters, $usercontexts, $limit = 0) {
 
-        // TODO: filter usercontexts.
-        $search = array('query' => array('bool' => array('must' => array(array('match' => array('content' => $filters->q))))));
+        if (empty($limit)) {
+            $limit = \core_search\manager::MAX_RESULTS;
+        }
 
-        return $this->make_request($search);
+        $search = $this->create_user_query($filters, $usercontexts);
+
+        $response = $this->make_request($search);
+
+        //Construct the reponse that will be returned. This allows the number of hits returned to respect the hit limit.
+        foreach ($response as $responseid => $responsecontent) {
+            if ($responseid == $limit) {
+                //Number of hits has reached the limit. Stop adding to the constructed response.
+                break;
+            }
+            $limitedresponse[] = $responsecontent;
+        }
+
+        //Set lastquerycount so get_query_total_count can return the proper amount.
+        $this->lastquerycount = count($limitedresponse);
+
+        return $limitedresponse;
+    }
+
+    protected function create_user_query($filters, $usercontexts) {
+        global $USER;
+
+        $data = clone $filters;
+
+        $query = array('query' => array('filtered' => array('query' => array('bool' => array('must' => array(array('match' => array('content' => $data->q))))))));
+        //Add title matching to the query so that it affects query score, if there is a title.
+        if (!empty($data->title)) {
+            $query['query']['filtered']['query']['bool']['must'][] = array('match' => array('title' => $data->title));            
+        }
+
+        //Apply filters
+        //
+        //Filter for owneruserid
+        $query['query']['filtered']['query']['bool']['should'][] = array('term' => array('owneruserid' => \core_search\manager::NO_OWNER_ID));
+        $query['query']['filtered']['query']['bool']['should'][] = array('term' => array('owneruserid' => $USER->id));
+
+        //Add filter for the proper contextid that the user can access. If $usercontexts is true, the user can view all contexts.
+        if ($usercontexts && is_array($usercontexts)) {
+            $allcontexts = array();
+            foreach ($usercontexts as $areaid => $areacontexts) {
+                foreach ($areacontexts as $contextid) {
+                    //Ensure contextids are unique.
+                    $allcontexts[$contextid] = $contextid;
+                }
+            }
+            if (empty($allcontexts)) {
+                //User has no valid contexts so return no results.
+                return array(); //CHECK THAT BLANK SEARCH RETURNS NOTHING IN ELASTICSEARCH!!!!
+            }
+
+            //Add contextid filters
+            foreach ($allcontexts as $cid => $contextid) {
+                $query['query']['filtered']['filter']['bool']['should'][] = array('term' => array('contextid' => $contextid));
+            }            
+
+        }
+
+        //Add filter for modified date ranges
+        if ($data->timestart > 0) {
+            $query['query']['filtered']['filter']['bool']['must'][] = array('range' => array('modified' => array('gte' => $data->timestart)));
+        }
+        if ($data->timeend > 0) {
+            $query['query']['filtered']['filter']['bool']['must'][] = array('range' => array('modified' => array('lte' => $data->timeend)));
+        }
+
+        return $query;
+    }
+
+    public function get_query_total_count() {
+        return $this->lastquerycount;
     }
 
     /**
      *
      */
     private function make_request($search) {
-        $url = $this->serverhostname.'/moodle/_search?pretty';
+        $url = $this->serverhostname.'/'.$this->indexname.'/_search';
 
         $c = new \curl();
-        $results = json_decode($c->post($url, json_encode($search)));
+        $jsonsearch = json_encode($search);
+
+        // A giant block of code that is really just error checking around the curl request.
+        try {
+            // Now actually do the request.
+            $result = $c->post($url, $jsonsearch);
+            $code = $c->get_errno();
+            $info = $c->get_info();
+            // Now error handling. It is just informational, since we aren't tracking per file/doc results.
+            if ($code != 0) {
+                // This means an internal cURL error occurred error is in result.
+                $message = 'Curl error '.$code.' while searching with query: '.$jsonsearch.': '.$result.'. Info: '.$info.'.';
+                debugging($message, DEBUG_DEVELOPER);
+            }
+        } catch (\Exception $e) {
+            // There was an error, but we are not tracking per-file success, so we just continue on.
+            debugging('Unknown exception while searching with query: "'.$jsonsearch.'".', DEBUG_DEVELOPER);
+        }
+
         $docs = array();
+        $results = json_decode($result);
+
         if (isset($results->hits)) {
             $numgranted = 0;
             // TODO: apply \core_search\manager::MAX_RESULTS .
@@ -96,6 +201,7 @@ class engine  extends \core_search\engine {
                 $access = $searcharea->check_access($r->_source->itemid);
                 switch ($access) {
                     case \core_search\manager::ACCESS_DELETED:
+                    //TODO: Delete by itemid
                     case \core_search\manager::ACCESS_DENIED:
                       continue;
                     case \core_search\manager::ACCESS_GRANTED:
@@ -108,7 +214,10 @@ class engine  extends \core_search\engine {
             if (!$results) {
                 return false;
             }
-            return $results->error;
+            if (isset($results->error)) {
+                return $results->error;
+            }
+            return $results->message;
         }
         return $docs;
     }
@@ -122,7 +231,7 @@ class engine  extends \core_search\engine {
 
     public function delete($module = null) {
         if (!$module) {
-            $url = $this->serverhostname.'/moodle/?pretty';
+            $url = $this->serverhostname.'/'.$this->indexname.'/?pretty';
             $c = new \curl();
             if ($response = json_decode($c->delete($url))) {
                 if ( (isset($response->acknowledged) && ($response->acknowledged == true)) ||

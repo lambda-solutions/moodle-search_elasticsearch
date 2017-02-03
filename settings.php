@@ -34,5 +34,9 @@ if ($ADMIN->fulltree) {
                                                     new lang_string('serverhostname', 'search_elasticsearch'),
                                                     new lang_string('serverhostname_desc', 'search_elasticsearch'),
                                                     'localhost:9200', PARAM_TEXT));
+        $settings->add(new admin_setting_configtext('search_elasticsearch/index_name',
+                                                    new lang_string('indexname', 'search_elasticsearch'),
+                                                    new lang_string('indexname_desc', 'search_elasticsearch'),
+                                                    'moodle', PARAM_TEXT));
     }
 }
